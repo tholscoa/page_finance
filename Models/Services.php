@@ -384,45 +384,53 @@ class Services
     if($source_wallet_id == $beneficiary_wallet_id){
         return [false, 'Cannot transfer into same wallet'];
     }
-    
+    //get source wallet id
     $get_source_array = $this->getWallet($source_wallet_id);
     if(!$get_source_array[0]){
+      // if failed to get wallet
       return [false, $get_source_array[1] . ". Source wallet not found"];
     }
 
+    //get beneficiary wallet id
     $get_beneficiary_array = $this->getWallet($beneficiary_wallet_id);
     if(!$get_beneficiary_array[0]){
+      // if failed to get wallet
       return [false, $get_beneficiary_array[1]. ". Beneficiary wallet not found"];
     }
 
-
+    // check status of source wallet
     if($get_source_array[1]["status"] != true){
+      // if wallet status is not active
       return [false, "wallet status is not active"];
     }
 
-    //check is user have enough balance
+    // check is user have enough balance
     $enough = (($get_source_array[1]["balance"] - $amount) >= $get_source_array[1]['minimum_balance'] ) ? true : false;
     if(!$enough){
+      // 
       return [false, "Insufficient balance"];
     }
 
     $debit = $this->creditDebitUser($source_wallet_id, 'debit', $amount);
     if(!$debit){
+    // create transaction record for source with failed status
       $this->createTransaction($transaction_id, $reference_no, $source_wallet_id, $beneficiary_wallet_id, $amount, 'debit', 'failed', $narrative);
       return [false, "transaction failed"];
     }
-
+    // create transaction record for source with pending status until beneficiary wallet is credited
     $this->createTransaction($transaction_id, $reference_no, $source_wallet_id, $beneficiary_wallet_id, $amount, 'debit', 'pending', $narrative);
 
 
     $credit = $this->creditDebitUser($beneficiary_wallet_id, 'credit', $amount);
     if(!$credit){
-      $this->createTransaction($transaction_id, $reference_no, $source_wallet_id, $beneficiary_wallet_id, $amount, 'credit', 'failed', $narrative);
+      //no transaction history should be created for beneficiary if transaction failed only update transaction status of source to failed
+      // $this->createTransaction($transaction_id, $reference_no, $source_wallet_id, $beneficiary_wallet_id, $amount, 'credit', 'failed', $narrative);
       $this->UpdateTransction($transaction_id, $source_wallet_id, 'failed');
       return [false, "failed to credit beneficiary"];
     }
-    
+    //update transaction history for source to be success status after crediting beneficiary wallet
     $this->UpdateTransction($transaction_id, $source_wallet_id, 'success');
+    // create transaction record for beneficiary
     $this->createTransaction($transaction_id, $reference_no, $source_wallet_id, $beneficiary_wallet_id, $amount, 'credit', 'success', $narrative);
 
     return [true, "Transaction Successful"];
